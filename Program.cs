@@ -46,7 +46,7 @@ List<ServiceTicket> serviceTickets = new()
         CustomerId = 3,
         EmployeeId = 1,
         Description = "Adam needs money help.",
-        Emergency = false,
+        Emergency = true,
         DateCompleted = null
     },
     new ServiceTicket
@@ -176,27 +176,31 @@ app.MapDelete("/servicetickets/{id}", (int id) =>
     }
 });
 
-app.MapPut("/servicetickets/{id}", (int id, ServiceTicket serviceTicket) =>
+app.MapPut("/servicetickets/{id}", (int id, ServiceTicket updatedServiceTicket) =>
 {
-    ServiceTicket ticketToUpdate = serviceTickets.FirstOrDefault(st => st.Id == id);
-    int ticketIndex = serviceTickets.IndexOf(ticketToUpdate);
-    if (ticketToUpdate == null)
+    // Find the existing service ticket by id
+    ServiceTicket existingServiceTicket = serviceTickets.FirstOrDefault(st => st.Id == id);
+
+    if (existingServiceTicket == null)
     {
         return Results.NotFound();
     }
-    //the id in the request route doesn't match the id from the ticket in the request body. That's a bad request!
-    if (id != serviceTicket.Id)
-    {
-        return Results.BadRequest();
-    }
-    serviceTickets[ticketIndex] = serviceTicket;
-    return Results.Ok();
+    existingServiceTicket.EmployeeId = updatedServiceTicket.EmployeeId;
+    return Results.Ok(existingServiceTicket);
 });
+
 
 app.MapPost("/servicetickets/{id}/complete", (int id) =>
 {
     ServiceTicket ticketToComplete = serviceTickets.FirstOrDefault(st => st.Id == id);
     ticketToComplete.DateCompleted = DateTime.Today;
+});
+
+app.MapGet("/pending-emergency-tickets", () =>
+{
+    List<ServiceTicket> pendingEmergencyTickets = serviceTickets
+        .Where(st => st.Emergency && st.DateCompleted == null).ToList();
+    return Results.Ok(pendingEmergencyTickets);
 });
 
 app.Run();
