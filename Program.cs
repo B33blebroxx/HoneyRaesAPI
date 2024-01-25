@@ -71,7 +71,7 @@ List<ServiceTicket> serviceTickets = new()
     {
         Id = 4,
         CustomerId = 1,
-        EmployeeId = 1,
+        EmployeeId = null,
         Description = "Jeff needs help promoting his shows.",
         Emergency = false,
         DateCompleted = new DateTime (2021, 09, 22)
@@ -80,7 +80,7 @@ List<ServiceTicket> serviceTickets = new()
     {
         Id = 5,
         CustomerId = 3,
-        EmployeeId = null,
+        EmployeeId = 2,
         Description = "Adam needs a new gimmick.",
         Emergency = true,
         DateCompleted = new DateTime (2011, 11, 11)
@@ -178,29 +178,114 @@ app.MapDelete("/servicetickets/{id}", (int id) =>
 
 app.MapPut("/servicetickets/{id}", (int id, ServiceTicket updatedServiceTicket) =>
 {
-    // Find the existing service ticket by id
     ServiceTicket existingServiceTicket = serviceTickets.FirstOrDefault(st => st.Id == id);
+
+    existingServiceTicket.EmployeeId = updatedServiceTicket.EmployeeId;
 
     if (existingServiceTicket == null)
     {
         return Results.NotFound();
     }
-    existingServiceTicket.EmployeeId = updatedServiceTicket.EmployeeId;
     return Results.Ok(existingServiceTicket);
+
 });
 
 
 app.MapPost("/servicetickets/{id}/complete", (int id) =>
 {
     ServiceTicket ticketToComplete = serviceTickets.FirstOrDefault(st => st.Id == id);
-    ticketToComplete.DateCompleted = DateTime.Today;
+    if (ticketToComplete != null)
+    {
+        ticketToComplete.DateCompleted = DateTime.Today;
+        return Results.Ok("Ticket marked complete");
+    }
+    else
+    {
+        return Results.NotFound("There are no complete service tickets.");
+    }
+
 });
 
 app.MapGet("/pending-emergency-tickets", () =>
 {
     List<ServiceTicket> pendingEmergencyTickets = serviceTickets
         .Where(st => st.Emergency && st.DateCompleted == null).ToList();
-    return Results.Ok(pendingEmergencyTickets);
+
+    if (pendingEmergencyTickets != null)
+    {
+        return Results.Ok(pendingEmergencyTickets);
+    }
+    else
+    {
+        return Results.NotFound("No pending emergency tickets found.");
+    }
+});
+
+app.MapGet("/servicetickets/unassigned", () =>
+{
+    List<ServiceTicket> unassigned = serviceTickets
+    .Where(st => st.EmployeeId == null).ToList();
+    if (unassigned != null)
+    {
+        return Results.Ok(unassigned);
+    }
+    else
+    {
+        return Results.NotFound("There are no unassigned tickets.");
+    }
+});
+
+app.MapGet("/customers/none-closed-in-year", () =>
+{
+    List<Customer> noClosesInOverAYear = customers
+    .Where(c => serviceTickets
+    .Any(st => st.CustomerId == c.Id && (st.DateCompleted == null || st.DateCompleted == DateTime.Now.AddYears(-1))))
+    .ToList();
+    
+    if (noClosesInOverAYear != null)
+    {
+        return Results.Ok(noClosesInOverAYear);
+    }
+    else
+    {
+        return Results.NotFound();
+    }
+});
+
+app.MapGet("/employees/available", () =>
+{
+    List<Employee> availableEmployees = employees
+    .Where(e => !serviceTickets.Any(st => st.EmployeeId == e.Id && st.DateCompleted == null))
+    .ToList();
+
+    return Results.Ok(availableEmployees);
+});
+
+app.MapGet("/employees/{id}/customers", (int id) =>
+{
+    //Get employee by Id
+    Employee employee = employees.FirstOrDefault(e => e.Id == id);
+
+    if (employee == null)
+    {
+        return Results.NotFound("Employee not found");
+    }
+    //Gets all service tickets related to the employeeId
+    List<ServiceTicket> employeeServiceTickets = serviceTickets.Where(st => st.EmployeeId == id)
+    .ToList();
+
+    if (employeeServiceTickets.Count == 0)
+    {
+        return Results.Ok("There are no service tickets assigned to this employee.");
+    }
+    //Gets the Ids of all customers in the employeeServiceTickets list with no duplicates
+    List<int> customerIds = employeeServiceTickets.Select(st => st.CustomerId).Distinct().ToList();
+
+    //Make a list of the customers whose Ids we grabbed in the last code
+    List<Customer> customersAssignedToEmployee = customers.Where(c => customerIds.Contains(c.Id))
+    .ToList();
+
+    return Results.Ok(customersAssignedToEmployee);
 });
 
 app.Run();
