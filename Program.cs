@@ -241,7 +241,7 @@ app.MapGet("/customers/none-closed-in-year", () =>
     .Where(c => serviceTickets
     .Any(st => st.CustomerId == c.Id && (st.DateCompleted == null || st.DateCompleted == DateTime.Now.AddYears(-1))))
     .ToList();
-    
+
     if (noClosesInOverAYear != null)
     {
         return Results.Ok(noClosesInOverAYear);
@@ -286,6 +286,50 @@ app.MapGet("/employees/{id}/customers", (int id) =>
     .ToList();
 
     return Results.Ok(customersAssignedToEmployee);
+});
+
+app.MapGet("/employees/employee-of-the-month", () =>
+{
+    DateTime lastMonth = DateTime.Now.AddMonths(-1);
+    Employee employeeOfMonth = employees
+    .OrderByDescending(e => serviceTickets
+    .Count(st => st.EmployeeId == e.Id && st.DateCompleted.HasValue && st.DateCompleted.Value.Month == lastMonth.Month))
+    .FirstOrDefault();
+
+    return Results.Ok(employeeOfMonth);
+});
+
+app.MapGet("/servicetickets/review", () =>
+{
+    List<ServiceTicket> completedTickets = serviceTickets
+    .Where(st => st.DateCompleted.HasValue)
+    .OrderBy(st => st.DateCompleted)
+    .ToList();
+
+    foreach (var ticket in completedTickets)
+    {
+        ticket.Customer = customers.FirstOrDefault(c => c.Id == ticket.CustomerId);
+        ticket.Employee = employees.FirstOrDefault(e => e.Id == ticket.EmployeeId);
+    }
+
+    return Results.Ok(completedTickets);
+});
+
+app.MapGet("/servicetickets/prioritized", () =>
+{
+    var prioritizedTickets = serviceTickets
+       .Where(st => !st.DateCompleted.HasValue)
+       .OrderByDescending(st => st.Emergency)
+       .ThenBy(st => st.EmployeeId.HasValue)
+       .ToList();
+
+    foreach (var ticket in prioritizedTickets)
+    {
+        ticket.Customer = customers.FirstOrDefault(c => c.Id == ticket.CustomerId);
+        ticket.Employee = employees.FirstOrDefault(e => e.Id == ticket.EmployeeId);
+    }
+
+    return Results.Ok(prioritizedTickets);
 });
 
 app.Run();
